@@ -5,10 +5,37 @@
       "id": "c7998528-c9db-4b22-8c8f-a16e0affd94d",
       "name": "bmcshell-tool-ipmi",
       "type": "toolplugin",
+      "version": "1.0.2",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-ipmi-v1.0.2/bmcshell-tool-ipmi%401.0.2.zip",
+      "sha256": "17632bd388c23ae4d45ba67c8ed815d5ad35e86267f577132a6fa70cd57637d0",
+      "description": "执行当前目标的原生 IPMI 命令，支持二进制响应输出。",
+      "platforms": [
+        "windows-amd64"
+      ]
+    },
+    {
+      "id": "c7998528-c9db-4b22-8c8f-a16e0affd94d",
+      "name": "bmcshell-tool-ipmi",
+      "type": "toolplugin",
       "version": "1.0.1",
       "coreApi": 1,
       "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-ipmi-v1.0.1/bmcshell-tool-ipmi%401.0.1.zip",
       "sha256": "32f45ed7c0bec0e6b1b643f08d93e4233e388a1c5105f82b3e453e8bc8c417bf",
+      "description": "执行当前目标的原生 IPMI 命令，支持二进制响应输出。",
+      "platforms": [
+        "windows-amd64"
+      ]
+    },
+    {
+      "id": "15b746d7-7b0d-4556-89c8-d88078a3117a",
+      "name": "bmcshell-tool-redfish",
+      "type": "toolplugin",
+      "version": "1.0.2",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-redfish-v1.0.2/bmcshell-tool-redfish%401.0.2.zip",
+      "sha256": "52f28ee0ee06e5afc7a13dd1f304c14e453e5d644ebd2975adefacc132bb2822",
+      "description": "对当前目标执行 Redfish 请求，支持 JSON 和请求体文件。",
       "platforms": [
         "windows-amd64"
       ]
@@ -21,6 +48,20 @@
       "coreApi": 1,
       "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-redfish-v1.0.1/bmcshell-tool-redfish%401.0.1.zip",
       "sha256": "ac2bd50e68b64a6f3e6b09577fffd215f6cdd05bc350d8ea2d5906c58ebeda8c",
+      "description": "对当前目标执行 Redfish 请求，支持 JSON 和请求体文件。",
+      "platforms": [
+        "windows-amd64"
+      ]
+    },
+    {
+      "id": "6ad7023f-7be5-4c61-8c92-57af9e256dbf",
+      "name": "bmcshell-tool-snmp",
+      "type": "toolplugin",
+      "version": "1.0.2",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-snmp-v1.0.2/bmcshell-tool-snmp%401.0.2.zip",
+      "sha256": "cec89e732f8f160f25cc6831776559f84cb36507c51a1adf6ac2ab2999726ce6",
+      "description": "管理当前 BMC 的 SNMP 配置，并提供 v1、v2c 和 v3 命令。",
       "platforms": [
         "windows-amd64"
       ]
@@ -33,6 +74,7 @@
       "coreApi": 1,
       "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-snmp-v1.0.1/bmcshell-tool-snmp%401.0.1.zip",
       "sha256": "5add3bd61f4dcce4f1feb6237f0e51e4e2b1c4a70ce3063c26020bb4104646eb",
+      "description": "管理当前 BMC 的 SNMP 配置，并提供 v1、v2c 和 v3 命令。",
       "platforms": [
         "windows-amd64"
       ]
