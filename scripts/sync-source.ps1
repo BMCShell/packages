@@ -104,7 +104,6 @@ function Publish-ReleaseAssets([string] $Tag, [bool] $Prerelease, $Release, [str
     }
     if ($Release.prerelease -ne $Prerelease) { throw "现有发布记录 $Tag 的预发行状态不一致。" }
 
-    $assets = @{}
     foreach ($path in $Paths) {
         $name = [IO.Path]::GetFileName($path)
         $asset = Get-ReleaseAsset $Release $name
@@ -136,12 +135,19 @@ function Publish-ReleaseAssets([string] $Tag, [bool] $Prerelease, $Release, [str
                 if ((Get-Sha256 $Temporary) -cne $expected) { throw "草稿发布文件 '$name' 的内容不一致。" }
             }
         }
-        $assets[$name] = $asset
     }
     if ($Release.draft) {
         $Release = Invoke-RestMethod -Method Patch -Uri "$endpoint/$($Release.id)" -Headers $writeHeaders `
             -ContentType 'application/json' -Body '{"draft":false,"make_latest":"false"}' -TimeoutSec 60
         if ($Release.draft -or $Release.tag_name -cne $Tag) { throw "版本 $Tag 发布失败。" }
+        # Asset URLs obtained while a release is a draft contain a temporary tag.
+        $publishedTag = [uri]::EscapeDataString($Tag)
+        $Release = Invoke-RestMethod -Uri "$endpoint/tags/$publishedTag" -Headers $writeHeaders -TimeoutSec 60
+    }
+    $assets = @{}
+    foreach ($path in $Paths) {
+        $name = [IO.Path]::GetFileName($path)
+        $assets[$name] = Get-ReleaseAsset $Release $name
     }
     $assets
 }
