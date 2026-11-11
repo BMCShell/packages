@@ -18,31 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Check source access
-        id: source-access
-        shell: bash
-        env:
-          SOURCE_RELEASES_TOKEN: ${{ secrets.SOURCE_RELEASES_TOKEN }}
-        run: |
-          if [[ -n "$SOURCE_RELEASES_TOKEN" ]]; then
-            echo 'enabled=true' >> "$GITHUB_OUTPUT"
-          elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
-            echo '::error::Configure SOURCE_RELEASES_TOKEN for the private plugin releases.'
-            exit 1
-          else
-            echo '::notice::Scheduled sync skipped until SOURCE_RELEASES_TOKEN is configured.'
-          fi
       - uses: actions/checkout@v6
-        if: steps.source-access.outputs.enabled == 'true'
       - name: Mirror and verify release assets
-        if: steps.source-access.outputs.enabled == 'true'
         shell: pwsh
         env:
-          SOURCE_RELEASES_TOKEN: ${{ secrets.SOURCE_RELEASES_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/sync-source.ps1
       - name: Publish source index
-        if: steps.source-access.outputs.enabled == 'true'
         shell: bash
         run: |
           git add -- index.json

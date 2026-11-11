@@ -11,14 +11,6 @@ $allowedPackages = [ordered]@{
     'bmcshell-tool-snmp' = '6ad7023f-7be5-4c61-8c92-57af9e256dbf'
 }
 
-function New-GitHubHeaders([string] $Token) {
-    @{
-        Authorization = "Bearer $Token"
-        Accept = 'application/vnd.github+json'
-        'X-GitHub-Api-Version' = '2022-11-28'
-    }
-}
-
 function Get-GitHubReleases([string] $Repository, [hashtable] $Headers) {
     for ($page = 1; ; $page++) {
         $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases?per_page=100&page=$page" `
@@ -40,6 +32,19 @@ function Save-GitHubAsset([string] $Repository, $Asset, [hashtable] $Headers, [s
     $binaryHeaders.Accept = 'application/octet-stream'
     Invoke-WebRequest -Uri "https://api.github.com/repos/$Repository/releases/assets/$($Asset.id)" `
         -Headers $binaryHeaders -OutFile $Path -TimeoutSec 120
+}
+
+function Save-PublicGitHubAsset([string] $Repository, [string] $Tag, $Asset, [string] $Path, [string] $Name = [IO.Path]::GetFileName($Path)) {
+    if ($Asset.name -cne $name -or $Asset.state -cne 'uploaded') {
+        throw "$Repository has no uploaded asset for '$name'."
+    }
+    $url = [uri] $Asset.browser_download_url
+    if (!$url -or !$url.IsAbsoluteUri -or $url.Scheme -cne 'https' -or $url.Host -cne 'github.com' -or
+        !$url.IsDefaultPort -or $url.UserInfo -or $url.Query -or $url.Fragment -or
+        [uri]::UnescapeDataString($url.AbsolutePath) -cne "/$Repository/releases/download/$Tag/$name") {
+        throw "Unexpected public download URL for '$name'."
+    }
+    Invoke-WebRequest -Uri $url -OutFile $Path -TimeoutSec 120 -MaximumRetryCount 3 -RetryIntervalSec 2
 }
 
 function Get-Sha256([string] $Path) {
@@ -137,11 +142,12 @@ function Publish-ReleaseAssets([string] $Tag, [bool] $Prerelease, $Release, [str
 if ($env:GITHUB_REPOSITORY -ine $distribution -or !$env:GITHUB_TOKEN) {
     throw "Run the synchronization in $distribution with its repository token."
 }
-if (!$env:SOURCE_RELEASES_TOKEN) {
-    throw 'Configure SOURCE_RELEASES_TOKEN with Contents read access to the three upstream plugin repositories.'
+$readHeaders = @{
+    Accept = 'application/vnd.github+json'
+    'X-GitHub-Api-Version' = '2022-11-28'
 }
-$readHeaders = New-GitHubHeaders $env:SOURCE_RELEASES_TOKEN
-$writeHeaders = New-GitHubHeaders $env:GITHUB_TOKEN
+$writeHeaders = $readHeaders.Clone()
+$writeHeaders.Authorization = "Bearer $env:GITHUB_TOKEN"
 $index = Join-Path (Split-Path -Parent $PSScriptRoot) 'index.json'
 $indexed = Get-Content -LiteralPath $index -Raw | ConvertFrom-Json
 if ($indexed.schema -ne 1 -or $indexed.packages -isnot [array]) { throw 'Invalid public source index.' }
@@ -152,6 +158,10 @@ foreach ($entry in $indexed.packages) {
 }
 
 $publicReleases = @{}
+$upstreamReleases = @{}
+foreach ($name in $allowedPackages.Keys) {
+    $upstreamReleases[$name] = @(Get-GitHubReleases "BMCShell/$name" $readHeaders)
+}
 foreach ($release in (Get-GitHubReleases $distribution $writeHeaders)) {
     $publicReleases[$release.tag_name] = $release
 }
@@ -162,7 +172,7 @@ try {
     $temporary = Join-Path $work 'verify-download'
     foreach ($name in $allowedPackages.Keys) {
         $upstream = "BMCShell/$name"
-        foreach ($release in (Get-GitHubReleases $upstream $readHeaders)) {
+        foreach ($release in $upstreamReleases[$name]) {
             if ($release.draft -or $release.tag_name -cnotmatch '^v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
                 continue
             }
@@ -172,8 +182,8 @@ try {
             $manifestName = "$name@$version.manifest.json"
             $zip = Join-Path $work $zipName
             $manifest = Join-Path $work $manifestName
-            Save-GitHubAsset $upstream (Get-ReleaseAsset $release $zipName) $readHeaders $zip
-            Save-GitHubAsset $upstream (Get-ReleaseAsset $release $manifestName) $readHeaders $manifest
+            Save-PublicGitHubAsset $upstream $release.tag_name (Get-ReleaseAsset $release $zipName) $zip
+            Save-PublicGitHubAsset $upstream $release.tag_name (Get-ReleaseAsset $release $manifestName) $manifest
             $hash = Test-PackageRelease $name $version $zip $manifest
             foreach ($previous in $indexed.packages) {
                 if ($previous.id -ceq $allowedPackages[$name] -and $previous.version -ceq $version -and $previous.sha256 -ine $hash) {
@@ -183,14 +193,9 @@ try {
 
             $assets = Publish-ReleaseAssets $tag $release.prerelease $publicReleases[$tag] @($zip, $manifest) $temporary
             foreach ($path in @($zip, $manifest)) {
-                $asset = $assets[[IO.Path]::GetFileName($path)]
-                $url = [uri] $asset.browser_download_url
-                $assetPath = [uri]::UnescapeDataString($url.AbsolutePath)
-                if ($url.Scheme -cne 'https' -or $url.Host -cne 'github.com' -or $url.UserInfo -or
-                    $url.Query -or $url.Fragment -or $assetPath -cne "/$distribution/releases/download/$tag/$($asset.name)") {
-                    throw "Unexpected public download URL for '$($asset.name)'."
-                }
-                Invoke-WebRequest -Uri $url -OutFile $temporary -TimeoutSec 120 -MaximumRetryCount 3 -RetryIntervalSec 2
+                $nameInRelease = [IO.Path]::GetFileName($path)
+                $asset = $assets[$nameInRelease]
+                Save-PublicGitHubAsset $distribution $tag $asset $temporary -Name $nameInRelease
                 if ((Get-Sha256 $temporary) -cne (Get-Sha256 $path)) {
                     throw "Public asset '$($asset.name)' has different bytes."
                 }
