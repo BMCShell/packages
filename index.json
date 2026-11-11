@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "packages": [
+    {
+      "id": "c7998528-c9db-4b22-8c8f-a16e0affd94d",
+      "name": "bmcshell-tool-ipmi",
+      "type": "toolplugin",
+      "version": "1.0.1",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-ipmi-v1.0.1/bmcshell-tool-ipmi%401.0.1.zip",
+      "sha256": "32f45ed7c0bec0e6b1b643f08d93e4233e388a1c5105f82b3e453e8bc8c417bf",
+      "platforms": [
+        "windows-amd64"
+      ]
+    },
+    {
+      "id": "15b746d7-7b0d-4556-89c8-d88078a3117a",
+      "name": "bmcshell-tool-redfish",
+      "type": "toolplugin",
+      "version": "1.0.1",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-redfish-v1.0.1/bmcshell-tool-redfish%401.0.1.zip",
+      "sha256": "ac2bd50e68b64a6f3e6b09577fffd215f6cdd05bc350d8ea2d5906c58ebeda8c",
+      "platforms": [
+        "windows-amd64"
+      ]
+    },
+    {
+      "id": "6ad7023f-7be5-4c61-8c92-57af9e256dbf",
+      "name": "bmcshell-tool-snmp",
+      "type": "toolplugin",
+      "version": "1.0.1",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-tool-snmp-v1.0.1/bmcshell-tool-snmp%401.0.1.zip",
+      "sha256": "5add3bd61f4dcce4f1feb6237f0e51e4e2b1c4a70ce3063c26020bb4104646eb",
+      "platforms": [
+        "windows-amd64"
+      ]
+    }
+  ]
+}
