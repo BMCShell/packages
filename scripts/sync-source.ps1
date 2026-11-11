@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+    同步已发布的 BMCShell 工具包并更新公共软件源索引。
+.DESCRIPTION
+    在 BMCShell/packages 的发布流程中运行。脚本会校验上游 ZIP 和清单，发布匹配的文件，然后更新索引。需要配置仓库令牌。
+#>
+
 #requires -Version 7.4
 [CmdletBinding()]
 param()
@@ -26,7 +33,7 @@ function Get-ReleaseAsset($Release, [string] $Name) {
 
 function Save-GitHubAsset([string] $Repository, $Asset, [hashtable] $Headers, [string] $Path) {
     if ($Asset.state -cne 'uploaded' -or $Asset.id -le 0) {
-        throw "$Repository has no uploaded asset for '$([IO.Path]::GetFileName($Path))'."
+        throw "仓库 $Repository 中没有已上传的发布文件 '$([IO.Path]::GetFileName($Path))'。"
     }
     $binaryHeaders = $Headers.Clone()
     $binaryHeaders.Accept = 'application/octet-stream'
@@ -36,13 +43,13 @@ function Save-GitHubAsset([string] $Repository, $Asset, [hashtable] $Headers, [s
 
 function Save-PublicGitHubAsset([string] $Repository, [string] $Tag, $Asset, [string] $Path, [string] $Name = [IO.Path]::GetFileName($Path)) {
     if ($Asset.name -cne $name -or $Asset.state -cne 'uploaded') {
-        throw "$Repository has no uploaded asset for '$name'."
+        throw "仓库 $Repository 中没有已上传的发布文件 '$name'。"
     }
     $url = [uri] $Asset.browser_download_url
     if (!$url -or !$url.IsAbsoluteUri -or $url.Scheme -cne 'https' -or $url.Host -cne 'github.com' -or
         !$url.IsDefaultPort -or $url.UserInfo -or $url.Query -or $url.Fragment -or
         [uri]::UnescapeDataString($url.AbsolutePath) -cne "/$Repository/releases/download/$Tag/$name") {
-        throw "Unexpected public download URL for '$name'."
+        throw "发布文件 '$name' 的公共下载 URL 与预期不符。"
     }
     Invoke-WebRequest -Uri $url -OutFile $Path -TimeoutSec 120 -MaximumRetryCount 3 -RetryIntervalSec 2
 }
@@ -58,14 +65,14 @@ function Test-PackageRelease([string] $Name, [string] $Version, [string] $Zip, [
     if ($checksum.schema -ne 1 -or $checksum.id -cne $id -or $checksum.name -cne $Name -or
         $checksum.version -cne $Version -or $checksum.type -cne 'toolplugin' -or
         $checksum.artifact -cne [IO.Path]::GetFileName($Zip) -or $checksum.sha256 -ine $zipHash) {
-        throw "Invalid release manifest for $Name $Version."
+        throw "扩展包 $Name $Version 的发行清单无效。"
     }
 
     $archive = [IO.Compression.ZipFile]::OpenRead($Zip)
     try {
         $entries = @($archive.Entries | Where-Object FullName -CEQ 'bmc-package.json')
         if ($entries.Count -ne 1 -or $entries[0].Length -gt 1MB) {
-            throw "Invalid package manifest in $Name $Version."
+            throw "扩展包 $Name $Version 的包清单无效。"
         }
         $reader = [IO.StreamReader]::new($entries[0].Open())
         try { $package = $reader.ReadToEnd() | ConvertFrom-Json }
@@ -77,7 +84,7 @@ function Test-PackageRelease([string] $Name, [string] $Version, [string] $Zip, [
     if ($package.schema -ne 1 -or $package.id -cne $id -or $package.name -cne $Name -or
         $package.publisher -cne 'bmcshell' -or $package.version -cne $Version -or
         $package.type -cne 'toolplugin' -or $package.coreApi -ne $checksum.coreApi) {
-        throw "Unexpected package identity in $Name $Version."
+        throw "扩展包 $Name $Version 的标识与预期不符。"
     }
     $zipHash
 }
@@ -95,14 +102,14 @@ function Publish-ReleaseAssets([string] $Tag, [bool] $Prerelease, $Release, [str
         $Release = Invoke-RestMethod -Method Post -Uri $endpoint -Headers $writeHeaders `
             -ContentType 'application/json' -Body $body -TimeoutSec 60
     }
-    if ($Release.prerelease -ne $Prerelease) { throw "Existing release $Tag has a different prerelease state." }
+    if ($Release.prerelease -ne $Prerelease) { throw "现有发布记录 $Tag 的预发行状态不一致。" }
 
     $assets = @{}
     foreach ($path in $Paths) {
         $name = [IO.Path]::GetFileName($path)
         $asset = Get-ReleaseAsset $Release $name
         if (!$Release.draft -and $asset.state -cne 'uploaded') {
-            throw "Published release $Tag is missing '$name'."
+            throw "已发布版本 $Tag 缺少文件 '$name'。"
         }
         if ($Release.draft) {
             if ($asset.state -ceq 'starter') {
@@ -113,20 +120,20 @@ function Publish-ReleaseAssets([string] $Tag, [bool] $Prerelease, $Release, [str
             if (!$asset) {
                 $upload = $Release.upload_url -replace '\{.*\}$', ''
                 if ($upload -cne "https://uploads.github.com/repos/$distribution/releases/$($Release.id)/assets") {
-                    throw "Unexpected upload URL for $Tag."
+                    throw "标签 $Tag 的上传 URL 与预期不符。"
                 }
                 $asset = Invoke-RestMethod -Method Post -Uri "$upload`?name=$([uri]::EscapeDataString($name))" `
                     -Headers $writeHeaders -ContentType 'application/octet-stream' -InFile $path -TimeoutSec 120
             }
             if ($asset.name -cne $name -or $asset.state -cne 'uploaded') {
-                throw "Unexpected release asset for $Tag."
+                throw "标签 $Tag 的发布文件与预期不符。"
             }
             $expected = Get-Sha256 $path
             if ($asset.digest) {
-                if ($asset.digest -ine "sha256:$expected") { throw "Draft asset '$name' has different bytes." }
+                if ($asset.digest -ine "sha256:$expected") { throw "草稿发布文件 '$name' 的内容不一致。" }
             } else {
                 Save-GitHubAsset $distribution $asset $writeHeaders $Temporary
-                if ((Get-Sha256 $Temporary) -cne $expected) { throw "Draft asset '$name' has different bytes." }
+                if ((Get-Sha256 $Temporary) -cne $expected) { throw "草稿发布文件 '$name' 的内容不一致。" }
             }
         }
         $assets[$name] = $asset
@@ -134,13 +141,13 @@ function Publish-ReleaseAssets([string] $Tag, [bool] $Prerelease, $Release, [str
     if ($Release.draft) {
         $Release = Invoke-RestMethod -Method Patch -Uri "$endpoint/$($Release.id)" -Headers $writeHeaders `
             -ContentType 'application/json' -Body '{"draft":false,"make_latest":"false"}' -TimeoutSec 60
-        if ($Release.draft -or $Release.tag_name -cne $Tag) { throw "Release $Tag did not publish." }
+        if ($Release.draft -or $Release.tag_name -cne $Tag) { throw "版本 $Tag 发布失败。" }
     }
     $assets
 }
 
 if ($env:GITHUB_REPOSITORY -ine $distribution -or !$env:GITHUB_TOKEN) {
-    throw "Run the synchronization in $distribution with its repository token."
+    throw "请在 $distribution 仓库中配置其令牌后运行同步。"
 }
 $readHeaders = @{
     Accept = 'application/vnd.github+json'
@@ -150,10 +157,10 @@ $writeHeaders = $readHeaders.Clone()
 $writeHeaders.Authorization = "Bearer $env:GITHUB_TOKEN"
 $index = Join-Path (Split-Path -Parent $PSScriptRoot) 'index.json'
 $indexed = Get-Content -LiteralPath $index -Raw | ConvertFrom-Json
-if ($indexed.schema -ne 1 -or $indexed.packages -isnot [array]) { throw 'Invalid public source index.' }
+if ($indexed.schema -ne 1 -or $indexed.packages -isnot [array]) { throw '公共软件源索引格式无效。' }
 foreach ($entry in $indexed.packages) {
     if ($entry.name -cnotin $allowedPackages.Keys -or $entry.id -cne $allowedPackages[$entry.name]) {
-        throw "Public index contains an unexpected package '$($entry.name)'."
+        throw "公共索引中包含未预期的扩展包 '$($entry.name)'。"
     }
 }
 
@@ -187,7 +194,7 @@ try {
             $hash = Test-PackageRelease $name $version $zip $manifest
             foreach ($previous in $indexed.packages) {
                 if ($previous.id -ceq $allowedPackages[$name] -and $previous.version -ceq $version -and $previous.sha256 -ine $hash) {
-                    throw "Indexed version $name $version has different bytes. Publish a new version."
+                    throw "索引中已存在内容不同的 $name $version。请使用新版本号发布。"
                 }
             }
 
@@ -197,11 +204,11 @@ try {
                 $asset = $assets[$nameInRelease]
                 Save-PublicGitHubAsset $distribution $tag $asset $temporary -Name $nameInRelease
                 if ((Get-Sha256 $temporary) -cne (Get-Sha256 $path)) {
-                    throw "Public asset '$($asset.name)' has different bytes."
+                    throw "公共发布文件 '$($asset.name)' 的内容不一致。"
                 }
             }
             $artifacts.Add(@{ path = $zip; url = $assets[$zipName].browser_download_url })
-            Write-Output "Verified $name $version."
+            Write-Output "已校验 $name $version。"
         }
     }
     if ($artifacts.Count -gt 0) {
