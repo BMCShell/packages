@@ -11,11 +11,11 @@ bmc plugin search ipmi
 bmc plugin install bmcshell-tool-ipmi
 ```
 
-索引列出 IPMI、Redfish 和 SNMP 通用插件。要固定版本，可以运行 `bmc plugin install bmcshell-tool-ipmi@1.0.1`。
+索引列出 IPMI、Redfish 和 SNMP 通用插件，以及简讯、关怀和毒妇主题。要固定版本，可以运行 `bmc plugin install bmcshell-tool-ipmi@1.0.1`。
 
 ## 发布流程
 
-插件仓库推送与包清单版本相同的 `v<version>` tag 后，工作流在该仓库生成 ZIP 和校验清单。分发仓库从已发布的 Release 同步这两份附件，确认公开下载的 SHA-256 后更新 `index.json`。公开 Release tag 采用 `<package>-v<version>`。
+通用工具的源仓库推送与包清单版本相同的 `v<version>` 标签后，工作流生成 ZIP 和校验清单。分发仓库同步这两份附件。主题 ZIP 和校验清单直接发布到本仓库。分发仓库的 Release 标签统一采用 `<package>-v<version>`。同步工作流检查公开下载的 SHA-256 和包标识后更新 `index.json`。
 
 ## 自动同步
 

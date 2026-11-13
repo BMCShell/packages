@@ -12,11 +12,24 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $distribution = 'BMCShell/packages'
-$allowedPackages = [ordered]@{
+$mirroredPackages = [ordered]@{
     'bmcshell-tool-ipmi' = 'c7998528-c9db-4b22-8c8f-a16e0affd94d'
     'bmcshell-tool-redfish' = '15b746d7-7b0d-4556-89c8-d88078a3117a'
     'bmcshell-tool-snmp' = '6ad7023f-7be5-4c61-8c92-57af9e256dbf'
 }
+$directThemes = [ordered]@{
+    'bmcshell-theme-care' = '0cf9329d-c9de-43ca-9ec7-224b74b05a44'
+    'bmcshell-theme-sharp-tongue' = 'a19086e4-7f76-437b-aa41-2ffe8f4e38f9'
+    'bmcshell-theme-signal' = '374e74c7-914a-4cd0-ab70-7dfc2670dbe7'
+}
+$allowedPackages = @{}
+foreach ($name in $mirroredPackages.Keys) {
+    $allowedPackages[$name] = @{ Id = $mirroredPackages[$name]; Type = 'toolplugin' }
+}
+foreach ($name in $directThemes.Keys) {
+    $allowedPackages[$name] = @{ Id = $directThemes[$name]; Type = 'theme' }
+}
+$versionPattern = '((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)'
 
 function Get-GitHubReleases([string] $Repository, [hashtable] $Headers) {
     for ($page = 1; ; $page++) {
@@ -59,11 +72,11 @@ function Get-Sha256([string] $Path) {
 }
 
 function Test-PackageRelease([string] $Name, [string] $Version, [string] $Zip, [string] $Manifest) {
-    $id = $allowedPackages[$Name]
+    $expected = $allowedPackages[$Name]
     $checksum = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
     $zipHash = Get-Sha256 $Zip
-    if ($checksum.schema -ne 1 -or $checksum.id -cne $id -or $checksum.name -cne $Name -or
-        $checksum.version -cne $Version -or $checksum.type -cne 'toolplugin' -or
+    if ($checksum.schema -ne 1 -or $checksum.id -cne $expected.Id -or $checksum.name -cne $Name -or
+        $checksum.version -cne $Version -or $checksum.type -cne $expected.Type -or
         $checksum.artifact -cne [IO.Path]::GetFileName($Zip) -or $checksum.sha256 -ine $zipHash) {
         throw "扩展包 $Name $Version 的发行清单无效。"
     }
@@ -81,9 +94,9 @@ function Test-PackageRelease([string] $Name, [string] $Version, [string] $Zip, [
         $archive.Dispose()
     }
 
-    if ($package.schema -ne 1 -or $package.id -cne $id -or $package.name -cne $Name -or
+    if ($package.schema -ne 1 -or $package.id -cne $expected.Id -or $package.name -cne $Name -or
         $package.publisher -cne 'bmcshell' -or $package.version -cne $Version -or
-        $package.type -cne 'toolplugin' -or $package.coreApi -ne $checksum.coreApi) {
+        $package.type -cne $expected.Type -or $package.coreApi -ne $checksum.coreApi) {
         throw "扩展包 $Name $Version 的标识与预期不符。"
     }
     $zipHash
@@ -165,14 +178,15 @@ $index = Join-Path (Split-Path -Parent $PSScriptRoot) 'index.json'
 $indexed = Get-Content -LiteralPath $index -Raw | ConvertFrom-Json
 if ($indexed.schema -ne 1 -or $indexed.packages -isnot [array]) { throw '公共软件源索引格式无效。' }
 foreach ($entry in $indexed.packages) {
-    if ($entry.name -cnotin $allowedPackages.Keys -or $entry.id -cne $allowedPackages[$entry.name]) {
+    if ($entry.name -cnotin $allowedPackages.Keys -or $entry.id -cne $allowedPackages[$entry.name].Id -or
+        $entry.type -cne $allowedPackages[$entry.name].Type) {
         throw "公共索引中包含未预期的扩展包 '$($entry.name)'。"
     }
 }
 
 $publicReleases = @{}
 $upstreamReleases = @{}
-foreach ($name in $allowedPackages.Keys) {
+foreach ($name in $mirroredPackages.Keys) {
     $upstreamReleases[$name] = @(Get-GitHubReleases "BMCShell/$name" $readHeaders)
 }
 foreach ($release in (Get-GitHubReleases $distribution $writeHeaders)) {
@@ -183,10 +197,10 @@ $work = [IO.Directory]::CreateTempSubdirectory('bmcshell-sync-').FullName
 try {
     $artifacts = [Collections.Generic.List[object]]::new()
     $temporary = Join-Path $work 'verify-download'
-    foreach ($name in $allowedPackages.Keys) {
+    foreach ($name in $mirroredPackages.Keys) {
         $upstream = "BMCShell/$name"
         foreach ($release in $upstreamReleases[$name]) {
-            if ($release.draft -or $release.tag_name -cnotmatch '^v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+            if ($release.draft -or $release.tag_name -cnotmatch "^v${versionPattern}$") {
                 continue
             }
             $version = $Matches[1]
@@ -199,7 +213,7 @@ try {
             Save-PublicGitHubAsset $upstream $release.tag_name (Get-ReleaseAsset $release $manifestName) $manifest
             $hash = Test-PackageRelease $name $version $zip $manifest
             foreach ($previous in $indexed.packages) {
-                if ($previous.id -ceq $allowedPackages[$name] -and $previous.version -ceq $version -and $previous.sha256 -ine $hash) {
+                if ($previous.id -ceq $allowedPackages[$name].Id -and $previous.version -ceq $version -and $previous.sha256 -ine $hash) {
                     throw "索引中已存在内容不同的 $name $version。请使用新版本号发布。"
                 }
             }
@@ -214,6 +228,28 @@ try {
                 }
             }
             $artifacts.Add(@{ path = $zip; url = $assets[$zipName].browser_download_url })
+            Write-Output "已校验 $name $version。"
+        }
+    }
+    foreach ($name in $directThemes.Keys) {
+        $tagPattern = '^' + [regex]::Escape($name) + "-v${versionPattern}$"
+        foreach ($release in $publicReleases.Values) {
+            if ($release.draft -or $release.tag_name -cnotmatch $tagPattern) { continue }
+            $version = $Matches[1]
+            $zipName = "$name@$version.zip"
+            $manifestName = "$name@$version.manifest.json"
+            $zip = Join-Path $work $zipName
+            $manifest = Join-Path $work $manifestName
+            $zipAsset = Get-ReleaseAsset $release $zipName
+            Save-PublicGitHubAsset $distribution $release.tag_name $zipAsset $zip
+            Save-PublicGitHubAsset $distribution $release.tag_name (Get-ReleaseAsset $release $manifestName) $manifest
+            $hash = Test-PackageRelease $name $version $zip $manifest
+            foreach ($previous in $indexed.packages) {
+                if ($previous.id -ceq $allowedPackages[$name].Id -and $previous.version -ceq $version -and $previous.sha256 -ine $hash) {
+                    throw "索引中已存在内容不同的 $name $version。请使用新版本号发布。"
+                }
+            }
+            $artifacts.Add(@{ path = $zip; url = $zipAsset.browser_download_url })
             Write-Output "已校验 $name $version。"
         }
     }
