@@ -148,6 +148,19 @@
       "id": "374e74c7-914a-4cd0-ab70-7dfc2670dbe7",
       "name": "bmcshell-theme-signal",
       "type": "theme",
+      "version": "1.1.0",
+      "coreApi": 1,
+      "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-theme-signal-v1.1.0/bmcshell-theme-signal%401.1.0.zip",
+      "sha256": "c7929b626ab15c0049a106821a05ff997d20ba9703a49b86b8044249e5284014",
+      "description": "双行 Bash 提示符，显示 BMC 认证灯、代理状态、当前目录和命令结果，并为 Redfish JSON 和日志直接着色。",
+      "platforms": [
+        "windows-amd64"
+      ]
+    },
+    {
+      "id": "374e74c7-914a-4cd0-ab70-7dfc2670dbe7",
+      "name": "bmcshell-theme-signal",
+      "type": "theme",
       "version": "1.0.4",
       "coreApi": 1,
       "url": "https://github.com/BMCShell/packages/releases/download/bmcshell-theme-signal-v1.0.4/bmcshell-theme-signal%401.0.4.zip",
